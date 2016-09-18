@@ -8,5 +8,11 @@
     "start": "node --use_strict start.js"
   },
   "author": "Ionut-Cristian Florescu <ionut.florescu@gmail.com>",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "iconv": "^2.2.1",
+    "jsdom": "^9.5.0",
+    "lodash": "^4.15.0",
+    "request-promise": "^4.1.1"
+  }
 }

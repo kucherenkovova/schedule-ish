@@ -1,43 +1,90 @@
-const http         = require('http'),
-      fs           = require('fs'),
-      path         = require('path'),
-      contentTypes = require('./utils/content-types'),
-      sysInfo      = require('./utils/sys-info'),
-      env          = process.env;
+const request = require('request-promise')
+const jsdom = require('jsdom')
+const _ = require('lodash')
+const iconv = require('iconv')
+const config = require('./config.json')
 
-let server = http.createServer(function (req, res) {
-  let url = req.url;
-  if (url == '/') {
-    url += 'index.html';
-  }
+const requestConfig = {
+  uri: config.scheduleLink,
+  method: 'GET',
+  encoding: 'binary'
+}
 
-  // IMPORTANT: Your application HAS to respond to GET /health with status 200
-  //            for OpenShift health monitoring
+const AMOUNT_OF_CLASSES = config.amountOfClasses
+const workweek = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
-  if (url == '/health') {
-    res.writeHead(200);
-    res.end();
-  } else if (url == '/info/gen' || url == '/info/poll') {
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'no-cache, no-store');
-    res.end(JSON.stringify(sysInfo[url.slice(6)]()));
-  } else {
-    fs.readFile('./static' + url, function (err, data) {
+request(requestConfig)
+  .then(windows1251ToUtf8)
+  .then(createWindow)
+  .then(fetchSchedule)
+  .then(schedule => {
+    console.log(JSON.stringify(schedule, null, 2))
+  })
+  .catch(err => console.error(err))
+
+function windows1251ToUtf8 (text) {
+  return new iconv.Iconv('windows-1251', 'utf8')
+    .convert(new Buffer(text, 'binary'))
+    .toString()
+}
+
+function createWindow (html) {
+  return new Promise((resolve, reject) => {
+    jsdom.env(html, (err, win) => {
       if (err) {
-        res.writeHead(404);
-        res.end('Not found');
-      } else {
-        let ext = path.extname(url).slice(1);
-        res.setHeader('Content-Type', contentTypes[ext]);
-        if (ext === 'html') {
-          res.setHeader('Cache-Control', 'no-cache, no-store');
-        }
-        res.end(data);
+        reject(err)
+        return
       }
-    });
-  }
-});
+      resolve(win)
+    })
+  })
+}
 
-server.listen(env.NODE_PORT || 3000, env.NODE_IP || 'localhost', function () {
-  console.log(`Application worker ${process.pid} started...`);
-});
+function fetchSchedule(window) {
+  const tbody = window.document.querySelector('tbody')
+
+  if (!tbody) return Promise.reject('No schedule table found!')
+  const groupBSchedule = getScheduleForGroup(tbody, currentClassEl => currentClassEl.lastChild)
+  const groupASchedule = getScheduleForGroup(tbody, currentClassEl => currentClassEl.lastChild.previousSibling)
+
+  return {
+    A: groupASchedule,
+    B: groupBSchedule
+  }
+}
+
+function getScheduleForGroup(root, selectGroupNode) {
+  let currentClassEl = root.firstChild
+
+  const groupSchedule = _.reduce(workweek, (result, val) => {
+    const daySchedule = {
+      [val]: _.reduce(
+        _.range(AMOUNT_OF_CLASSES),
+        (result) => {
+          result.push(getCurrentClassInfo(currentClassEl, selectGroupNode))
+          currentClassEl = currentClassEl.nextSibling
+          return result
+        },
+        []
+      )
+    }
+    // skip lame separator
+    if (currentClassEl) currentClassEl = currentClassEl.nextSibling
+    return Object.assign(result, daySchedule)
+  }, {})
+
+  return groupSchedule
+}
+
+function getCurrentClassInfo(currentClassEl, getNodeForGroup) {
+  const node = getNodeForGroup(currentClassEl)
+  const teacherNode = node.querySelector('.prp')
+  const lessonNode = node.querySelector('.predm')
+  const classroomNode = node.querySelector('.text-info')
+  const result = {
+    teacher: teacherNode && teacherNode.textContent || '',
+    lesson: lessonNode && lessonNode.textContent || '',
+    classroom: classroomNode && classroomNode.textContent || ''
+  }
+  return result
+}

@@ -1,3 +1,4 @@
 .idea/
 node_modules/
 schedule-ish.iml
+/npm-debug.log
