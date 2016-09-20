@@ -2,7 +2,7 @@ const request = require('request-promise')
 const jsdom = require('jsdom')
 const _ = require('lodash')
 const iconv = require('iconv')
-const config = require('./config.json')
+const config = require('./../config.json')
 
 const requestConfig = {
   uri: config.scheduleLink,
