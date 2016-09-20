@@ -81,6 +81,9 @@ function getCurrentClassInfo(currentClassEl, getNodeForGroup) {
   const teacherNode = node.querySelector('.prp')
   const lessonNode = node.querySelector('.predm')
   const classroomNode = node.querySelector('.text-info')
+  if (!classroomNode || !lessonNode || !teacherNode) {
+    return null
+  }
   const result = {
     teacher: teacherNode && teacherNode.textContent || '',
     lesson: lessonNode && lessonNode.textContent || '',
